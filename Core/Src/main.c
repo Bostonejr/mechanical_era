@@ -178,11 +178,13 @@ static void MX_SPI2_Init(void)
   hspi2.Init.Mode = SPI_MODE_MASTER;
   hspi2.Init.Direction = SPI_DIRECTION_2LINES;
   hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+  /* PS2 手柄协议使用 SPI Mode 3：时钟空闲为高，在第二个边沿采样。 */
+  hspi2.Init.CLKPolarity = SPI_POLARITY_HIGH;
+  hspi2.Init.CLKPhase = SPI_PHASE_2EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  /* 接收器只支持低速、低位先行的 PS2 串行格式。 */
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi2.Init.FirstBit = SPI_FIRSTBIT_LSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi2.Init.CRCPolynomial = 10;
@@ -191,6 +193,28 @@ static void MX_SPI2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI2_Init 2 */
+  /*
+   * 此段位于 CubeMX 保留区。即使 .ioc 被旧版 CubeMX 重新生成而丢失
+   * SPI 高级参数，也强制恢复 PS2 所需的 Mode 3、LSB-first、分频 256。
+   */
+  if (hspi2.Init.CLKPolarity != SPI_POLARITY_HIGH ||
+      hspi2.Init.CLKPhase != SPI_PHASE_2EDGE ||
+      hspi2.Init.BaudRatePrescaler != SPI_BAUDRATEPRESCALER_256 ||
+      hspi2.Init.FirstBit != SPI_FIRSTBIT_LSB)
+  {
+    if (HAL_SPI_DeInit(&hspi2) != HAL_OK)
+    {
+      Error_Handler();
+    }
+    hspi2.Init.CLKPolarity = SPI_POLARITY_HIGH;
+    hspi2.Init.CLKPhase = SPI_PHASE_2EDGE;
+    hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+    hspi2.Init.FirstBit = SPI_FIRSTBIT_LSB;
+    if (HAL_SPI_Init(&hspi2) != HAL_OK)
+    {
+      Error_Handler();
+    }
+  }
 
   /* USER CODE END SPI2_Init 2 */
 

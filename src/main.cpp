@@ -8,11 +8,18 @@ extern "C" SPI_HandleTypeDef hspi2;
 extern "C" void main_task() {
     init_outputs();
     ps2_init(hspi2);
+
+    constexpr uint32_t kWheelTestStepMs = 1000;
+    constexpr int kWheelTestDutyPercent = 35;
     uint32_t last_report = HAL_GetTick() - 500U;
     bool emergency_stop = false;
     bool key_sample = false;
     bool key_pressed = false;
     uint32_t key_change_ms = HAL_GetTick();
+    bool triangle_was_pressed = false;
+    bool wheel_test_active = false;
+    uint32_t wheel_test_started_ms = 0;
+
     while (true) {
         // 20 ms 去抖后按一次锁定急停，再按一次解除
         const bool key_now = HAL_GPIO_ReadPin(Key_GPIO_Port, Key_Pin) == GPIO_PIN_RESET;
@@ -30,7 +37,32 @@ extern "C" void main_task() {
         }
         ps2_update();
         const auto frame = ps2_read();
-        const auto command = emergency_stop ? DriveCommand{} : drive_from_ps2(frame);
+        const bool triangle_pressed = ps2_pressed(frame, Ps2Button::Triangle);
+        if (triangle_pressed && !triangle_was_pressed && !emergency_stop) {
+            // 每次按下三角键，仅执行一次 M1 -> M2 -> M3 -> M4 自检。
+            wheel_test_active = true;
+            wheel_test_started_ms = HAL_GetTick();
+        }
+        triangle_was_pressed = triangle_pressed;
+
+        const bool cancel_wheel_test = emergency_stop || ps2_pressed(frame, Ps2Button::Cross) ||
+                                       ps2_pressed(frame, Ps2Button::Select);
+        if (cancel_wheel_test) {
+            wheel_test_active = false;
+        }
+
+        DriveCommand command = emergency_stop ? DriveCommand{} : drive_from_ps2(frame);
+        if (wheel_test_active) {
+            const uint32_t elapsed = HAL_GetTick() - wheel_test_started_ms;
+            const unsigned motor = elapsed / kWheelTestStepMs;
+            if (motor < 4) {
+                command = {};
+                command.motor[motor] = kWheelTestDutyPercent;
+            } else {
+                wheel_test_active = false;
+                command = {};
+            }
+        }
         apply_motors(command);
         const auto arm_command = emergency_stop ? ArmCommand{} : arm_from_ps2(frame);
         apply_servos(arm_command);

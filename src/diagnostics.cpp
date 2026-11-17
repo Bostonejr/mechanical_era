@@ -1,4 +1,5 @@
 #include "diagnostics.hpp"
+#include "motor_pid.hpp"
 #include "ps2.hpp"
 #include <cstdio>
 
@@ -26,6 +27,18 @@ void report_status(const Ps2Frame &frame, DriveCommand command, bool emergency_s
     // GPIO 配置字段：PA11=0xA（复用推挽输出），PB10/PB11=0x2
     // （推挽输出）
     const int hardware_length =
+        // M4 是左后轮；输出其闭环状态，排查单轮编码器或 PID 参数问题。
+        std::snprintf(message, sizeof(message),
+                      "PID4 target=%d ticks=%d pwm=%d stalled=%u\\r\\n",
+                      motor_pid_status(3).target, motor_pid_status(3).encoder_ticks,
+                      motor_pid_status(3).output,
+                      static_cast<unsigned>(motor_pid_status(3).stalled));
+    if (hardware_length > 0 && static_cast<unsigned>(hardware_length) < sizeof(message)) {
+        HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t *>(message),
+                          static_cast<uint16_t>(hardware_length), 20);
+    }
+
+    const int m4_hardware_length =
         std::snprintf(message, sizeof(message),
                       "M4HW-v1 req=%d ccr=%lu arr=%lu run=%u en=%u moe=%u oc=%lu "
                       "pa11=%lX pb10=%lX pb11=%lX out=%u,%u map=%08lX\r\n",
@@ -41,8 +54,8 @@ void report_status(const Ps2Frame &frame, DriveCommand command, bool emergency_s
                       static_cast<unsigned>((GPIOB->IDR & motor4_A_Pin) != 0U),
                       static_cast<unsigned>((GPIOB->IDR & motor4_B_Pin) != 0U),
                       static_cast<unsigned long>(AFIO->MAPR));
-    if (hardware_length > 0 && static_cast<unsigned>(hardware_length) < sizeof(message)) {
+    if (m4_hardware_length > 0 && static_cast<unsigned>(m4_hardware_length) < sizeof(message)) {
         HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t *>(message),
-                          static_cast<uint16_t>(hardware_length), 20);
+                          static_cast<uint16_t>(m4_hardware_length), 20);
     }
 }

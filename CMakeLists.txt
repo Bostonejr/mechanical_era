@@ -19,6 +19,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/ps2.cpp
     src/ps2_protocol.cpp
     src/drive_control.cpp
+    src/motor_pid.cpp
     src/arm_control.cpp
     src/outputs.cpp
     src/diagnostics.cpp
