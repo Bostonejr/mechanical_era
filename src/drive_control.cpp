@@ -67,6 +67,8 @@ DriveCommand drive_from_ps2(const Ps2Frame &frame) {
     if (ps2_pressed(frame, Ps2Button::Start)) {
         // 按住 START 和且仅一个方向键，可单独测试一个电机。
         // 上=M1、右=M2、下=M3、左=M4；同时按住 R2 可反转。
+        // Hold START and only one directional key to test a single motor individually. Up = M1,
+        // Right = M2, Down = M3, Left = M4; hold R2 at the same time to reverse direction.
         DriveCommand result{};
         if (static_cast<int>(up) + down + left + right != 1) {
             return result;
