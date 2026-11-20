@@ -28,8 +28,7 @@ void report_status(const Ps2Frame &frame, DriveCommand command, bool emergency_s
     // （推挽输出）
     const int hardware_length =
         // M4 是左后轮；输出其闭环状态，排查单轮编码器或 PID 参数问题。
-        std::snprintf(message, sizeof(message),
-                      "PID4 target=%d ticks=%d pwm=%d stalled=%u\\r\\n",
+        std::snprintf(message, sizeof(message), "PID4 target=%d ticks=%d pwm=%d stalled=%u\\r\\n",
                       motor_pid_status(3).target, motor_pid_status(3).encoder_ticks,
                       motor_pid_status(3).output,
                       static_cast<unsigned>(motor_pid_status(3).stalled));
