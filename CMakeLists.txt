@@ -23,6 +23,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/arm_control.cpp
     src/outputs.cpp
     src/diagnostics.cpp
+    src/service_mode.cpp
 )
 target_include_directories(${PROJECT_NAME} PRIVATE inc)
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Werror>)

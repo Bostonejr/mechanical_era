@@ -66,7 +66,7 @@ void configure_analog() {
         }
     }
 }
-}
+} // namespace
 
 void ps2_init(SPI_HandleTypeDef &spi) {
     receiver_spi = &spi;

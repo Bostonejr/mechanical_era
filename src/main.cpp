@@ -2,6 +2,7 @@
 #include "ps2.hpp"
 #include "outputs.hpp"
 #include "diagnostics.hpp"
+#include "service_mode.hpp"
 
 extern "C" SPI_HandleTypeDef hspi2;
 
@@ -37,8 +38,14 @@ extern "C" void main_task() {
         }
         ps2_update();
         const auto frame = ps2_read();
+        service_mode_update(frame);
         const bool triangle_pressed = ps2_pressed(frame, Ps2Button::Triangle);
-        if (triangle_pressed && !triangle_was_pressed && !emergency_stop) {
+        // Wheel self-test only exists in service mode; in normal mode Triangle
+        // belongs to the arm presets (see the button map in ps2_protocol.hpp).
+        // 单轮自检仅在维修模式下可用；正常模式下 Triangle 属于机械臂预设
+        // （见 ps2_protocol.hpp 中的按键映射）。
+        if (service_mode_active() && triangle_pressed && !triangle_was_pressed &&
+            !emergency_stop) {
             // 每次按下三角键，仅执行一次 M1 -> M2 -> M3 -> M4 自检。
             wheel_test_active = true;
             wheel_test_started_ms = HAL_GetTick();
