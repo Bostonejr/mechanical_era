@@ -52,7 +52,7 @@ extern "C" void main_task() {
         }
         triangle_was_pressed = triangle_pressed;
 
-        const bool cancel_wheel_test = emergency_stop || ps2_pressed(frame, Ps2Button::Cross) ||
+        const bool cancel_wheel_test = emergency_stop || !frame.connected || ps2_pressed(frame, Ps2Button::Cross) ||
                                        ps2_pressed(frame, Ps2Button::Select);
         if (cancel_wheel_test) {
             wheel_test_active = false;
