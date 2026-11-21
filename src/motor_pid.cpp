@@ -1,8 +1,27 @@
 #include "motor_pid.hpp"
 #include "main.h"
 
-namespace {
+// External linkage on purpose: GDB/live watch cannot resolve variables inside
+// anonymous namespaces, and PID tuning needs live access to controllers.
+// 故意使用外部链接：GDB/live watch 无法解析匿名命名空间内的变量，
+// 而 PID 整定需要实时访问 controllers。
 constexpr unsigned kMotorCount = 4;
+struct MotorPid {
+    TIM_HandleTypeDef timer{};
+    uint16_t previous_count = 0;
+    float integral = 0.0F;
+    uint32_t last_motion_ms = 0;
+    int previous_target = 0;
+    int target = 0;
+    int encoder_ticks = 0; // signed: positive = forward, negative = reverse / 有符号：正=正转，负=反转
+    int output = 0;        // magnitude 0..100, direction comes from target / 幅值 0..100，方向由 target 决定
+    int stalled_target = 0;
+    bool stalled = false;
+    int8_t encoder_sign = 1;
+};
+MotorPid controllers[kMotorCount];
+
+namespace {
 constexpr int kMaxTargetPercent = 100;
 constexpr float kMaxOutput = 100.0F;
 constexpr uint32_t kControlPeriodMs = 10;
@@ -14,8 +33,8 @@ constexpr int kStallRetryDelta = 10;
 // 100% 目标速度对应每秒的编码器计数。当前按 20 ticks / 10 ms 标定，
 // 即 2000 ticks/s；实测后只改这一个数。
 constexpr float kTicksPerSecondAtFullSpeed = 2000.0F;
-constexpr float kProportionalGain = 3.0F;
-constexpr float kIntegralGain = 8.0F;
+constexpr float kProportionalGain = 10.0F;
+constexpr float kIntegralGain = 1.0F;
 // I 项上限始终保持 100%，改 Ki 时不需要再手算 kIntegralLimit。
 constexpr float kIntegralLimit = kMaxOutput / kIntegralGain;
 
@@ -36,21 +55,6 @@ static_assert(valid_encoder_signs(), "kEncoderSign entries must be +1 or -1");
 static_assert(kMotorCount == 4, "DriveCommand and telemetry assume four motors");
 static_assert(kIntegralGain > 0.0F, "kIntegralGain must be positive");
 
-struct MotorPid {
-    TIM_HandleTypeDef timer{};
-    uint16_t previous_count = 0;
-    float integral = 0.0F;
-    uint32_t last_motion_ms = 0;
-    int previous_target = 0;
-    int target = 0;
-    int encoder_ticks = 0; // 有符号：正=正转，负=反转
-    int output = 0;        // 幅值 0..100，方向由 target 决定
-    int stalled_target = 0;
-    bool stalled = false;
-    int8_t encoder_sign = 1;
-};
-
-MotorPid controllers[kMotorCount];
 uint32_t last_update_ms = 0;
 
 int magnitude(int value) { return value < 0 ? -value : value; }
@@ -143,8 +147,7 @@ int update_controller(MotorPid &controller, int target, uint32_t now_ms, float d
         return 0;
     }
 
-    if (controller.previous_target == 0 ||
-        (target < 0) != (controller.previous_target < 0)) {
+    if (controller.previous_target == 0 || (target < 0) != (controller.previous_target < 0)) {
         // 从停车起步或换向时，重新开始积分和堵转计时。
         controller.integral = 0.0F;
         controller.last_motion_ms = now_ms;
@@ -160,8 +163,7 @@ int update_controller(MotorPid &controller, int target, uint32_t now_ms, float d
             controller.stalled = false;
             controller.integral = 0.0F;
             controller.last_motion_ms = now_ms;
-        } else if (magnitude(target) >=
-                   magnitude(controller.stalled_target) + kStallRetryDelta) {
+        } else if (magnitude(target) >= magnitude(controller.stalled_target) + kStallRetryDelta) {
             controller.stalled = false;
             controller.integral = 0.0F;
             controller.last_motion_ms = now_ms;
@@ -181,8 +183,7 @@ int update_controller(MotorPid &controller, int target, uint32_t now_ms, float d
 
     const float candidate_integral =
         clamp(controller.integral + error * dt_s, -kIntegralLimit, kIntegralLimit);
-    const float requested =
-        kProportionalGain * error + kIntegralGain * candidate_integral;
+    const float requested = kProportionalGain * error + kIntegralGain * candidate_integral;
 
     // 只有目标足够大且控制器确实在输出时才判堵转；
     // 低速蠕动、滑行和反转不会被误判为堵转。
@@ -222,8 +223,7 @@ void motor_pid_init() {
     for (unsigned i = 0; i < kMotorCount; ++i) {
         MotorPid &controller = controllers[i];
         controller.encoder_sign = kEncoderSign[i];
-        controller.previous_count =
-            static_cast<uint16_t>(__HAL_TIM_GET_COUNTER(&controller.timer));
+        controller.previous_count = static_cast<uint16_t>(__HAL_TIM_GET_COUNTER(&controller.timer));
         controller.integral = 0.0F;
         controller.last_motion_ms = now_ms;
         controller.previous_target = 0;
@@ -243,8 +243,8 @@ DriveCommand motor_pid_update(const DriveCommand &target, uint32_t now_ms) {
         // 两次控制更新之间保持上一次的输出幅值，目标归零时立即停车。
         for (unsigned i = 0; i < kMotorCount; ++i) {
             const int command = clamp_target(target.motor[i]);
-            output.motor[i] = command == 0 ? 0 :
-                              (command < 0 ? -controllers[i].output : controllers[i].output);
+            output.motor[i] =
+                command == 0 ? 0 : (command < 0 ? -controllers[i].output : controllers[i].output);
         }
         return output;
     }
@@ -253,8 +253,8 @@ DriveCommand motor_pid_update(const DriveCommand &target, uint32_t now_ms) {
     const uint32_t dt_ms = elapsed > kMaxDtMs ? kMaxDtMs : elapsed;
     const float dt_s = static_cast<float>(dt_ms) / 1000.0F;
     for (unsigned i = 0; i < kMotorCount; ++i) {
-        output.motor[i] = update_controller(controllers[i], clamp_target(target.motor[i]),
-                                            now_ms, dt_s);
+        output.motor[i] =
+            update_controller(controllers[i], clamp_target(target.motor[i]), now_ms, dt_s);
     }
     return output;
 }

@@ -4,13 +4,13 @@
         {
             "name": "Debug (OpenOCD)",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/mechanical_era.elf",
+            "executable": "D:/Gmaster/mechanical_era/mechanical_era/build/Debug/mechanical_era.elf",
             "request": "launch",
             "type": "cortex-debug",
             "runToEntryPoint": "main",
             "servertype": "openocd",
-            "gdbPath": "arm-none-eabi-gdb",
-            "armToolchainPath": "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin",
+            "gdbPath": "D:\\Gmaster\\GCC\\GCC\\bin\\arm-none-eabi-gdb.exe",
+            "armToolchainPath": "D:\\Gmaster\\GCC\\GCC\\bin",
             "configFiles": [
                 "interface/stlink.cfg",
                 "target/stm32f1x.cfg"

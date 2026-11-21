@@ -11,7 +11,7 @@ enum class Wheel : unsigned { FrontLeft = 0, FrontRight, RearLeft, RearRight };
 constexpr Wheel kMotorWheel[4] = {Wheel::FrontLeft, Wheel::FrontRight, Wheel::RearRight,
                                   Wheel::RearLeft};
 // +1 表示 A=1、B=0 时车轮朝车头方向滚动，否则使用 -1。
-constexpr int kMotorPolarity[4] = {1, 1, 1, 1};
+constexpr int kMotorPolarity[4] = {1, 1, -1, -1};
 
 // 历史变量名带 Duty。这里定义的是混控送往速度闭环的目标比例上限。
 constexpr int kMaxDutyPercent = 100;
@@ -26,8 +26,7 @@ constexpr int kAxisDeadzone = 16;
 constexpr int kPrecisionScalePercent = 30;
 constexpr int kNormalScalePercent = 70;
 constexpr int kTurboScalePercent = 100;
-static_assert(kPrecisionScalePercent > 0 &&
-                  kPrecisionScalePercent < kNormalScalePercent &&
+static_assert(kPrecisionScalePercent > 0 && kPrecisionScalePercent < kNormalScalePercent &&
                   kNormalScalePercent < kTurboScalePercent && kTurboScalePercent <= 100,
               "Invalid drive mode scales");
 // 编译期检查目标上限和死区配置。

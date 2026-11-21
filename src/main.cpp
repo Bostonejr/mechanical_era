@@ -44,15 +44,15 @@ extern "C" void main_task() {
         // belongs to the arm presets (see the button map in ps2_protocol.hpp).
         // 单轮自检仅在维修模式下可用；正常模式下 Triangle 属于机械臂预设
         // （见 ps2_protocol.hpp 中的按键映射）。
-        if (service_mode_active() && triangle_pressed && !triangle_was_pressed &&
-            !emergency_stop) {
+        if (service_mode_active() && triangle_pressed && !triangle_was_pressed && !emergency_stop) {
             // 每次按下三角键，仅执行一次 M1 -> M2 -> M3 -> M4 自检。
             wheel_test_active = true;
             wheel_test_started_ms = HAL_GetTick();
         }
         triangle_was_pressed = triangle_pressed;
 
-        const bool cancel_wheel_test = emergency_stop || !frame.connected || ps2_pressed(frame, Ps2Button::Cross) ||
+        const bool cancel_wheel_test = emergency_stop || !frame.connected ||
+                                       ps2_pressed(frame, Ps2Button::Cross) ||
                                        ps2_pressed(frame, Ps2Button::Select);
         if (cancel_wheel_test) {
             wheel_test_active = false;
@@ -76,7 +76,7 @@ extern "C" void main_task() {
         // preset, command STOW here instead if neutral is not a safe pose.
         // 与 arm_control 的协调点：急停时目前发送清零的 ArmCommand（所有舵机回中位）。
         // 待程序员 3 定义 STOW 姿态后，若中位不是安全姿态，此处应改为命令 STOW。
-        const auto arm_command = emergency_stop ? arm_emergency_stop() : arm_from_ps2(frame);//P3
+        const auto arm_command = emergency_stop ? arm_emergency_stop() : arm_from_ps2(frame); // P3
         apply_servos(arm_command);
         if (HAL_GetTick() - last_report >= 500U) {
             report_status(frame, command, emergency_stop, key_pressed);

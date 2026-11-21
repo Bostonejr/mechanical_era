@@ -2,13 +2,17 @@
 #include <algorithm>
 
 Ps2Diagnostics ps2_debug;
+// External linkage on purpose: GDB/live watch cannot resolve variables inside
+// anonymous namespaces, and controller debugging needs live access to this.
+// 故意使用外部链接：GDB/live watch 无法解析匿名命名空间内的变量，
+// 手柄调试需要实时访问该变量。
+Ps2Frame latest_frame;
 
 namespace {
 constexpr uint32_t kPollMs = 20;
 constexpr uint32_t kConfigMs = 1000;
 constexpr uint32_t kTimeoutMs = 100;
 SPI_HandleTypeDef *receiver_spi = nullptr;
-Ps2Frame latest_frame;
 uint32_t last_poll = 0;
 uint32_t last_config = 0;
 uint32_t last_valid_ms = 0;
