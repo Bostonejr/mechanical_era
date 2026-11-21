@@ -35,7 +35,13 @@ void apply_servos(ArmCommand command) {
     for (unsigned i = 0; i < 4; ++i) {
         const int percent =
             command.servo[i] < -100 ? -100 : (command.servo[i] > 100 ? 100 : command.servo[i]);
-        const int pulse_us = kNeutralUs + kSpanUs * percent / 100;
+        
+        int pulse_us = kNeutralUs + kSpanUs * percent / 100;
+        
+        // 【新增】P3 绝对物理限幅，防止软件意外导致舵机超行程堵转烧毁
+        if (pulse_us < 600) pulse_us = 600;   
+        if (pulse_us > 2400) pulse_us = 2400; 
+        
         __HAL_TIM_SET_COMPARE(&htim8, servo_channels[i], static_cast<uint32_t>(pulse_us));
     }
 }

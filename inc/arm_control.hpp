@@ -8,3 +8,5 @@ struct ArmCommand {
 };
 
 ArmCommand arm_from_ps2(const Ps2Frame &frame);
+// 【新增】供 main.cpp 急停时调用，返回安全收车姿态
+ArmCommand arm_emergency_stop();
