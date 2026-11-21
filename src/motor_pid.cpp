@@ -13,8 +13,10 @@ struct MotorPid {
     uint32_t last_motion_ms = 0;
     int previous_target = 0;
     int target = 0;
-    int encoder_ticks = 0; // signed: positive = forward, negative = reverse / 有符号：正=正转，负=反转
-    int output = 0;        // magnitude 0..100, direction comes from target / 幅值 0..100，方向由 target 决定
+    int encoder_ticks =
+        0; // signed: positive = forward, negative = reverse / 有符号：正=正转，负=反转
+    int output =
+        0; // magnitude 0..100, direction comes from target / 幅值 0..100，方向由 target 决定
     int stalled_target = 0;
     bool stalled = false;
     int8_t encoder_sign = 1;
@@ -34,14 +36,14 @@ constexpr int kStallRetryDelta = 10;
 // 即 2000 ticks/s；实测后只改这一个数。
 constexpr float kTicksPerSecondAtFullSpeed = 2000.0F;
 constexpr float kProportionalGain = 10.0F;
-constexpr float kIntegralGain = 1.0F;
+constexpr float kIntegralGain = 0.001F;
 // I 项上限始终保持 100%，改 Ki 时不需要再手算 kIntegralLimit。
 constexpr float kIntegralLimit = kMaxOutput / kIntegralGain;
 
 // 每轮编码器方向。目标为正时，串口 PID 行的 k= 必须为正；
 // 如果某个轮子的 k= 为负，就把对应项改成 -1。
 // 首次上车前必须架空车轮逐个标定，符号错误会形成正反馈并让轮子全速。
-constexpr int8_t kEncoderSign[kMotorCount] = {1, 1, 1, 1};
+constexpr int8_t kEncoderSign[kMotorCount] = {1, -1, 1, -1};
 
 constexpr bool valid_encoder_signs() {
     for (unsigned i = 0; i < kMotorCount; ++i) {
