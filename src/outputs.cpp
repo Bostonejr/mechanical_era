@@ -24,6 +24,8 @@ const Motor kMotors[] = {
 constexpr uint32_t servo_channels[] = {TIM_CHANNEL_1, TIM_CHANNEL_2, TIM_CHANNEL_3, TIM_CHANNEL_4};
 
 int previous_motor_duty[4] = {};
+uint32_t reversal_ready_ms[4] = {};
+constexpr uint32_t kReversalDeadTimeMs = 2;
 }
 
 void apply_servos(ArmCommand command) {
@@ -39,25 +41,34 @@ void apply_servos(ArmCommand command) {
 }
 
 void apply_motors(DriveCommand command) {
-    command = motor_pid_update(command, HAL_GetTick());
-    int requested[4];
-    bool reversing = false;
+    const uint32_t now_ms = HAL_GetTick();
+    command = motor_pid_update(command, now_ms);
+    const uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim1);
+    const uint32_t full_scale = period + 1U;
+
     for (unsigned i = 0; i < 4; ++i) {
-        requested[i] = std::max(-100, std::min(100, command.motor[i]));
-        reversing |= requested[i] * previous_motor_duty[i] < 0;
-    }
-    if (reversing) {
-        for (const Motor &motor : kMotors) {
+        const Motor &motor = kMotors[i];
+        const int duty = std::max(-100, std::min(100, command.motor[i]));
+
+        // 单个轮子换向时只停这一个轮子，不再让四个轮子一起等 2 ms。
+        if (duty * previous_motor_duty[i] < 0) {
             __HAL_TIM_SET_COMPARE(&htim1, motor.channel, 0);
             HAL_GPIO_WritePin(motor.a_port, motor.a_pin, GPIO_PIN_RESET);
             HAL_GPIO_WritePin(motor.b_port, motor.b_pin, GPIO_PIN_RESET);
+            previous_motor_duty[i] = 0;
+            reversal_ready_ms[i] = now_ms + kReversalDeadTimeMs;
+            continue;
         }
-        HAL_Delay(2);
-    }
-    for (unsigned i = 0; i < 4; ++i) {
-        const Motor &motor = kMotors[i];
-        const int duty = requested[i];
-        if (!reversing && duty == previous_motor_duty[i]) {
+
+        // now_ms + 2 可能回绕，用有符号差值判断剩余死区时间。
+        if (static_cast<int32_t>(now_ms - reversal_ready_ms[i]) < 0) {
+            __HAL_TIM_SET_COMPARE(&htim1, motor.channel, 0);
+            HAL_GPIO_WritePin(motor.a_port, motor.a_pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(motor.b_port, motor.b_pin, GPIO_PIN_RESET);
+            continue;
+        }
+
+        if (duty == previous_motor_duty[i]) {
             continue;
         }
         HAL_GPIO_WritePin(motor.a_port, motor.a_pin, GPIO_PIN_RESET);
@@ -67,8 +78,7 @@ void apply_motors(DriveCommand command) {
                               duty > 0 ? motor.a_pin : motor.b_pin, GPIO_PIN_SET);
         }
         const uint32_t magnitude = static_cast<uint32_t>(duty < 0 ? -duty : duty);
-        const uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim1);
-        const uint32_t scaled = ((period + 1U) * magnitude) / 100U;
+        const uint32_t scaled = (full_scale * magnitude) / 100U;
         const uint32_t compare = scaled > period ? period : scaled;
         __HAL_TIM_SET_COMPARE(&htim1, motor.channel, compare);
         previous_motor_duty[i] = duty;
@@ -84,6 +94,7 @@ void init_outputs() {
         HAL_GPIO_WritePin(motor.a_port, motor.a_pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(motor.b_port, motor.b_pin, GPIO_PIN_RESET);
         previous_motor_duty[i] = 0;
+        reversal_ready_ms[i] = 0;
     }
     for (const Motor &motor : kMotors) {
         if (HAL_TIM_PWM_Start(&htim1, motor.channel) != HAL_OK) {
