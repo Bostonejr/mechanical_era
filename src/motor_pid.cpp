@@ -105,7 +105,9 @@ void configure_encoder_pins() {
 
     // PA15/PB3 原本是 JTAG 引脚；关闭 JTAG，保留 SWD 下载与调试。
     __HAL_AFIO_REMAP_SWJ_NOJTAG();
-    __HAL_AFIO_REMAP_TIM2_PARTIAL_2();
+    // M1 编码器接 PA15/PB3，必须用 TIM2 部分重映射 1；
+    // PARTIAL_2 会把 CH1/CH2 映射到 PA0/PA1，与 M3 的 TIM5 冲突。
+    __HAL_AFIO_REMAP_TIM2_PARTIAL_1();
 
     GPIO_InitTypeDef pins{};
     pins.Mode = GPIO_MODE_INPUT;
