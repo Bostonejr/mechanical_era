@@ -22,4 +22,4 @@ static_assert(kAxisDeadzone >= 0 && kAxisDeadzone < 127, "Invalid stick deadzone
 static_assert(kCalibrationDutyPercent > 0 && kCalibrationDutyPercent <= 100,
               "Invalid calibration duty");
 
-}
+} // namespace car_config
