@@ -38,7 +38,7 @@ constexpr float kStallMinOutput = 50.0F;
 // 100% 目标速度对应每秒的编码器计数。当前按 20 ticks / 10 ms 标定，
 // 即 2000 ticks/s；实测后只改这一个数。
 constexpr float kTicksPerSecondAtFullSpeed = 2000.0F;
-constexpr float kProportionalGain = 50.0F;
+constexpr float kProportionalGain = 10.0F;
 constexpr float kIntegralGain = 2.0F;
 // 速度前馈系数。按 100% 占空比对应满速的线性模型，稳态所需占空比
 // 约等于目标百分比，所以取 1.0；实车偏慢/偏冲可小幅修正（0.8~1.2）。
