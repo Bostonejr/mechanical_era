@@ -39,12 +39,13 @@ extern "C" void main_task() {
         ps2_update();
         const auto frame = ps2_read();
         service_mode_update(frame);
+        const bool service_active = service_mode_active();
         const bool triangle_pressed = ps2_pressed(frame, Ps2Button::Triangle);
         // Wheel self-test only exists in service mode; in normal mode Triangle
         // belongs to the arm presets (see the button map in ps2_protocol.hpp).
         // 单轮自检仅在维修模式下可用；正常模式下 Triangle 属于机械臂预设
         // （见 ps2_protocol.hpp 中的按键映射）。
-        if (service_mode_active() && triangle_pressed && !triangle_was_pressed && !emergency_stop) {
+        if (service_active && triangle_pressed && !triangle_was_pressed && !emergency_stop) {
             // 每次按下三角键，仅执行一次 M1 -> M2 -> M3 -> M4 自检。
             wheel_test_active = true;
             wheel_test_started_ms = HAL_GetTick();
@@ -71,10 +72,15 @@ extern "C" void main_task() {
             }
         }
         apply_motors(command);
-        // 急停时命令 arm_control 里的 STOW 收车姿态（角度制）。
-        // Emergency stop commands the STOW pose defined in arm_control.
-        const auto arm_command = emergency_stop ? arm_emergency_stop() : arm_from_ps2(frame); // P3
-        apply_servos(arm_command);
+        const auto shoulder_speed_us =
+            arm_shoulder_speed_pulse_us(frame, !service_active && !emergency_stop);
+        // 维修模式只测底盘。Start 单轮标定时，机械臂不应同时执行 PLACE。
+        if (service_active) {
+            apply_servos({}, false);
+        } else {
+            const auto arm_command = emergency_stop ? arm_emergency_stop() : arm_from_ps2(frame);
+            apply_servos(arm_command, true, shoulder_speed_us);
+        }
         if (HAL_GetTick() - last_report >= 500U) {
             report_status(frame, command, emergency_stop, key_pressed);
             last_report = HAL_GetTick();

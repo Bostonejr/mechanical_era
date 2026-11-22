@@ -28,9 +28,9 @@ uint32_t reversal_ready_ms[4] = {};
 constexpr uint32_t kReversalDeadTimeMs = 2;
 }
 
-void apply_servos(ArmCommand command) {
+void apply_servos(ArmCommand command, bool enabled, uint16_t shoulder_speed_us) {
     // R3 自锁释放：CCR=0，输出持续低电平，不发送舵机脉冲，舵机卸力。
-    if (arm_servos_released()) {
+    if (!enabled || arm_servos_released()) {
         for (const auto channel : servo_channels) {
             __HAL_TIM_SET_COMPARE(&htim8, channel, 0);
         }
@@ -42,6 +42,11 @@ void apply_servos(ArmCommand command) {
     static const int kMinUs[4] = {600, 600, 600, 600};
     static const int kMaxUs[4] = {2400, 2400, 2400, 2400};
     for (unsigned i = 0; i < 4; ++i) {
+        if (servo_channels[i] == TIM_CHANNEL_2 && kShoulderContinuousRotation) {
+            // 连续旋转舵机接收速度脉宽，位置预设不能驱动它。
+            __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, shoulder_speed_us);
+            continue;
+        }
         // ArmCommand.servo 是角度 0~180（90=中位），不是百分比。
         int degrees = command.servo[i];
         if (degrees < 0) degrees = 0;
@@ -114,8 +119,8 @@ void init_outputs() {
             Error_Handler();
         }
     }
-    //apply_servos({});//P3
     for (const auto channel : servo_channels) {
+        __HAL_TIM_SET_COMPARE(&htim8, channel, 0);
         if (HAL_TIM_PWM_Start(&htim8, channel) != HAL_OK) {
             Error_Handler();
         }
