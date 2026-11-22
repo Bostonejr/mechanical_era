@@ -37,6 +37,9 @@ constexpr int kStallRetryDelta = 10;
 constexpr float kTicksPerSecondAtFullSpeed = 2000.0F;
 constexpr float kProportionalGain = 10.0F;
 constexpr float kIntegralGain = 2.0F;
+// 速度前馈系数。按 100% 占空比对应满速的线性模型，稳态所需占空比
+// 约等于目标百分比，所以取 1.0；实车偏慢/偏冲可小幅修正（0.8~1.2）。
+constexpr float kFeedforwardGain = 1.0F;
 // I 项上限始终保持 100%，改 Ki 时不需要再手算 kIntegralLimit。
 constexpr float kIntegralLimit = kMaxOutput / kIntegralGain;
 
@@ -56,6 +59,7 @@ constexpr bool valid_encoder_signs() {
 static_assert(valid_encoder_signs(), "kEncoderSign entries must be +1 or -1");
 static_assert(kMotorCount == 4, "DriveCommand and telemetry assume four motors");
 static_assert(kIntegralGain > 0.0F, "kIntegralGain must be positive");
+static_assert(kFeedforwardGain >= 0.0F, "kFeedforwardGain must not be negative");
 
 uint32_t last_update_ms = 0;
 
@@ -183,9 +187,13 @@ int update_controller(MotorPid &controller, int target, uint32_t now_ms, float d
     const float actual_ticks = static_cast<float>(controller.encoder_ticks * direction);
     const float error = desired_ticks - actual_ticks;
 
+    // 前馈直接给出与目标速度对应的稳态占空比，缩短加速时的占空比爬升；
+    // 模型误差仍由 PI 修正，输出饱和时条件积分会冻结 I 项。
+    const float feedforward = kFeedforwardGain * static_cast<float>(magnitude(target));
     const float candidate_integral =
         clamp(controller.integral + error * dt_s, -kIntegralLimit, kIntegralLimit);
-    const float requested = kProportionalGain * error + kIntegralGain * candidate_integral;
+    const float requested =
+        feedforward + kProportionalGain * error + kIntegralGain * candidate_integral;
 
     // 只有目标足够大且控制器确实在输出时才判堵转；
     // 低速蠕动、滑行和反转不会被误判为堵转。
