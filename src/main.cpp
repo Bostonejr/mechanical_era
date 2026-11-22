@@ -5,6 +5,7 @@
 #include "service_mode.hpp"
 
 extern "C" SPI_HandleTypeDef hspi2;
+DriveCommand command;
 
 extern "C" void main_task() {
     init_outputs();
@@ -59,7 +60,8 @@ extern "C" void main_task() {
             wheel_test_active = false;
         }
 
-        DriveCommand command = emergency_stop ? DriveCommand{} : drive_from_ps2(frame);
+        const auto drive_frame = service_active ? frame : ps2_read_drive();
+        command = emergency_stop ? DriveCommand{} : drive_from_ps2(drive_frame);
         if (wheel_test_active) {
             const uint32_t elapsed = HAL_GetTick() - wheel_test_started_ms;
             const unsigned motor = elapsed / kWheelTestStepMs;
@@ -81,6 +83,7 @@ extern "C" void main_task() {
             const auto arm_command = emergency_stop ? arm_emergency_stop() : arm_from_ps2(frame);
             apply_servos(arm_command, true, shoulder_speed_us);
         }
+        ps2_recover_analog();
         if (HAL_GetTick() - last_report >= 500U) {
             report_status(frame, command, emergency_stop, key_pressed);
             last_report = HAL_GetTick();

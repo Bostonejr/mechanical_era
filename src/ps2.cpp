@@ -11,11 +11,13 @@ Ps2Frame latest_frame;
 namespace {
 constexpr uint32_t kPollMs = 20;
 constexpr uint32_t kConfigMs = 1000;
+constexpr uint32_t kDriveFrameHoldMs = 2 * kPollMs;
 constexpr uint32_t kTimeoutMs = 100;
 SPI_HandleTypeDef *receiver_spi = nullptr;
 uint32_t last_poll = 0;
 uint32_t last_config = 0;
 uint32_t last_valid_ms = 0;
+Ps2Frame last_valid_frame;
 
 void delay_us(uint32_t us) {
     const uint32_t start = DWT->CYCCNT;
@@ -75,6 +77,7 @@ void configure_analog() {
 void ps2_init(SPI_HandleTypeDef &spi) {
     receiver_spi = &spi;
     latest_frame = {};
+    last_valid_frame = {};
     last_valid_ms = 0;
     ps2_debug = {};
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -114,22 +117,38 @@ void ps2_update() {
             ++ps2_debug.input_changes;
         }
         last_valid_ms = HAL_GetTick();
+        last_valid_frame = frame;
         ps2_debug.last_valid_ms = last_valid_ms;
         ++ps2_debug.valid_frames;
     } else {
         ++ps2_debug.invalid_frames;
     }
     latest_frame = frame;
-    if ((!frame.connected || !frame.analog) &&
-        static_cast<uint32_t>(now - last_config) >= kConfigMs) {
-        last_config = now;
-        configure_analog();
+}
+
+void ps2_recover_analog() {
+    const uint32_t now = HAL_GetTick();
+    // 一次坏帧不触发重配。持续掉线时先由主循环停车，再跑配置命令。
+    if (latest_frame.analog ||
+        (last_valid_frame.analog && now - last_valid_ms < kDriveFrameHoldMs) ||
+        now - last_config < kConfigMs) {
+        return;
     }
+    last_config = now;
+    configure_analog();
 }
 
 Ps2Frame ps2_read() {
-    if (static_cast<uint32_t>(HAL_GetTick() - last_valid_ms) >= kTimeoutMs) {
+    if (HAL_GetTick() - last_valid_ms >= kTimeoutMs) {
         return {};
     }
     return latest_frame;
+}
+
+Ps2Frame ps2_read_drive() {
+    // 有效的松杆、Select 或数字模式帧均立即生效。只有坏帧使用上一次有效输入。
+    if (HAL_GetTick() - last_valid_ms >= kDriveFrameHoldMs) {
+        return {};
+    }
+    return last_valid_frame;
 }

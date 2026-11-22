@@ -139,6 +139,16 @@ void configure_encoder_pins() {
     HAL_GPIO_Init(GPIOB, &pins); // M4: TIM4_CH1/CH2
 }
 
+void reset_drive_state(MotorPid &controller, uint32_t now_ms) {
+    controller.integral = 0.0F;
+    controller.previous_target = 0;
+    controller.target = 0;
+    controller.output = 0;
+    controller.stalled = false;
+    controller.stalled_target = 0;
+    controller.last_motion_ms = now_ms;
+}
+
 int update_controller(MotorPid &controller, int target, uint32_t now_ms, float dt_s) {
     const uint16_t count = static_cast<uint16_t>(__HAL_TIM_GET_COUNTER(&controller.timer));
     const int16_t delta = static_cast<int16_t>(count - controller.previous_count);
@@ -147,12 +157,7 @@ int update_controller(MotorPid &controller, int target, uint32_t now_ms, float d
     controller.target = target;
 
     if (target == 0) {
-        controller.integral = 0.0F;
-        controller.previous_target = 0;
-        controller.output = 0;
-        controller.stalled = false;
-        controller.stalled_target = 0;
-        controller.last_motion_ms = now_ms;
+        reset_drive_state(controller, now_ms);
         return 0;
     }
 
@@ -254,11 +259,15 @@ DriveCommand motor_pid_update(const DriveCommand &target, uint32_t now_ms) {
     DriveCommand output{};
     const uint32_t elapsed = now_ms - last_update_ms;
     if (elapsed < kControlPeriodMs) {
-        // 两次控制更新之间保持上一次的输出幅值，目标归零时立即停车。
+        // 立即处理停车。重新起步或反向时，等下一次闭环计算新的 PWM。
         for (unsigned i = 0; i < kMotorCount; ++i) {
             const int command = clamp_target(target.motor[i]);
-            output.motor[i] =
-                command == 0 ? 0 : (command < 0 ? -controllers[i].output : controllers[i].output);
+            MotorPid &controller = controllers[i];
+            if (command == 0) {
+                reset_drive_state(controller, now_ms);
+            } else if (controller.target != 0 && (command < 0) == (controller.target < 0)) {
+                output.motor[i] = command < 0 ? -controller.output : controller.output;
+            }
         }
         return output;
     }

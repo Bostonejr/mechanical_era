@@ -68,8 +68,9 @@ void apply_motors(DriveCommand command) {
         const Motor &motor = kMotors[i];
         const int duty = std::max(-100, std::min(100, command.motor[i]));
 
-        // 单个轮子换向时只停这一个轮子，不再让四个轮子一起等 2 ms。
-        if (duty * previous_motor_duty[i] < 0) {
+        // 刚清零的通道也要留出换向间隔，避免闭环先给零、下一圈立即反向。
+        if (previous_motor_duty[i] != 0 &&
+            (duty == 0 || duty * previous_motor_duty[i] < 0)) {
             __HAL_TIM_SET_COMPARE(&htim1, motor.channel, 0);
             HAL_GPIO_WritePin(motor.a_port, motor.a_pin, GPIO_PIN_RESET);
             HAL_GPIO_WritePin(motor.b_port, motor.b_pin, GPIO_PIN_RESET);
@@ -80,9 +81,6 @@ void apply_motors(DriveCommand command) {
 
         // now_ms + 2 可能回绕，用有符号差值判断剩余死区时间。
         if (static_cast<int32_t>(now_ms - reversal_ready_ms[i]) < 0) {
-            __HAL_TIM_SET_COMPARE(&htim1, motor.channel, 0);
-            HAL_GPIO_WritePin(motor.a_port, motor.a_pin, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(motor.b_port, motor.b_pin, GPIO_PIN_RESET);
             continue;
         }
 

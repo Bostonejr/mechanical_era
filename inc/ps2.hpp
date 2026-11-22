@@ -22,5 +22,9 @@ struct Ps2Diagnostics {
 extern Ps2Diagnostics ps2_debug;
 void ps2_init(SPI_HandleTypeDef &spi);
 void ps2_update();
-// 超过 100 ms 没有有效报文时返回断线、中位、无按键。
+// 主循环已更新电机输出后，才允许尝试恢复模拟模式。
+void ps2_recover_analog();
+// 机械臂、维修模式和自检读取最新一帧，坏帧立即视为断线。
 Ps2Frame ps2_read();
+// 正常驾驶可以跨过一次坏帧，未收到有效帧时最多保持上次指令 40 ms。
+Ps2Frame ps2_read_drive();

@@ -83,8 +83,9 @@ ArmCommand arm_from_ps2(const Ps2Frame &frame) {
         return command;
     }
 
-    // R3 切换“全部舵机停止”（自锁），卡住时按一下舵机立刻卸力
-    if (pressed_edge(frame, Ps2Button::R3)) {
+    const bool elbow_selected = ps2_pressed(frame, Ps2Button::L3);
+    // 按住 L3 在控小臂时，误压右摇杆不会触发卸力。松开 L3 后仍可用 R3 切换。
+    if (!elbow_selected && pressed_edge(frame, Ps2Button::R3)) {
         servos_released = !servos_released;
         if (!servos_released) {
             // 恢复时锁在当前角度，不要继续往原目标顶
@@ -114,7 +115,7 @@ ArmCommand arm_from_ps2(const Ps2Frame &frame) {
     if (frame.analog) {
         const int rx = axis_percent(frame.right_x);
         const int ry = axis_percent(frame.right_y);
-        if (ps2_pressed(frame, Ps2Button::L3)) {
+        if (elbow_selected) {
             if (ry < -10 || ry > 10) target_pose[kServoElbow] = percent_to_degrees(ry);
         } else {
             if (rx < -10 || rx > 10) target_pose[kServoBase] = percent_to_degrees(rx);

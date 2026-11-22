@@ -1,4 +1,5 @@
 #include "diagnostics.hpp"
+#include "arm_control.hpp"
 #include "motor_pid.hpp"
 #include "ps2.hpp"
 #include "service_mode.hpp"
@@ -11,15 +12,17 @@ void report_status(const Ps2Frame &frame, DriveCommand command, bool emergency_s
     char message[192];
     const int length = std::snprintf(
         message, sizeof(message),
-        "PS2 online=%lu mode=%02lX keys=%04lX LX=%lu LY=%lu RX=%lu M=%d,%d,%d,%d STOP=%u KEY=%u "
-        "SVC=%u bad=%lu\r\n",
+        "PS2 online=%lu mode=%02lX keys=%04lX LX=%lu LY=%lu RX=%lu RY=%lu M=%d,%d,%d,%d STOP=%u KEY=%u "
+        "SVC=%u bad=%lu REL=%u CH4us=%lu\r\n",
         static_cast<unsigned long>(frame.connected), static_cast<unsigned long>(ps2_debug.mode),
         static_cast<unsigned long>(frame.buttons), static_cast<unsigned long>(frame.left_x),
         static_cast<unsigned long>(frame.left_y), static_cast<unsigned long>(frame.right_x),
+        static_cast<unsigned long>(frame.right_y),
         command.motor[0], command.motor[1], command.motor[2], command.motor[3],
         static_cast<unsigned>(emergency_stop), static_cast<unsigned>(key_pressed),
         static_cast<unsigned>(service_mode_active()),
-        static_cast<unsigned long>(ps2_debug.invalid_frames));
+        static_cast<unsigned long>(ps2_debug.invalid_frames),
+        static_cast<unsigned>(arm_servos_released()), static_cast<unsigned long>(TIM8->CCR4));
     if (length > 0 && static_cast<unsigned>(length) < sizeof(message)) {
         HAL_UART_Transmit(&huart3, reinterpret_cast<uint8_t *>(message),
                           static_cast<uint16_t>(length), 20);
