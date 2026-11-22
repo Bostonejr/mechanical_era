@@ -76,7 +76,12 @@ ArmCommand arm_emergency_stop() {
 }
 
 ArmCommand arm_from_ps2(const Ps2Frame &frame) {
-    if (!frame.connected) return arm_emergency_stop();
+    if (!frame.connected) {
+        // 掉帧时保持最近的姿态指令，避免反复跳到 STOW。板载急停仍单独调用 STOW。
+        ArmCommand command;
+        for (int i = 0; i < 4; ++i) command.servo[i] = current_pose[i];
+        return command;
+    }
 
     // R3 切换“全部舵机停止”（自锁），卡住时按一下舵机立刻卸力
     if (pressed_edge(frame, Ps2Button::R3)) {
@@ -119,9 +124,9 @@ ArmCommand arm_from_ps2(const Ps2Frame &frame) {
 
     last_buttons = frame.buttons;
 
-    // 4. 插值：每 20ms 最多 3°（约 150°/s）
+    // 4. 每 10ms 更新一次角度指令，保留每步 3° 的限幅。
     const uint32_t now = HAL_GetTick();
-    if (now - last_interp_ms >= 20) {
+    if (now - last_interp_ms >= 10) {
         last_interp_ms = now;
         for (int i = 0; i < 4; ++i) {
             int delta = target_pose[i] - current_pose[i];
@@ -139,3 +144,32 @@ ArmCommand arm_from_ps2(const Ps2Frame &frame) {
 }
 
 bool arm_servos_released() { return servos_released; }
+
+uint16_t arm_shoulder_speed_pulse_us(const Ps2Frame &frame, bool allowed) {
+    // 停转中位需按实际舵机校准。满杆仅偏移 50 µs，先用低速试车。
+    constexpr int kNeutralUs = 1500;
+    constexpr int kMaxOffsetUs = 50;
+    constexpr int kDeadzone = 16;
+    static bool ready = false;
+
+    if (!kShoulderContinuousRotation || !allowed || servos_released || !frame.connected || !frame.analog ||
+        ps2_pressed(frame, Ps2Button::L3)) {
+        ready = false;
+        return 0;
+    }
+
+    const int delta = static_cast<int>(frame.right_y) - 128;
+    const int distance = delta < 0 ? -delta : delta;
+    if (distance <= kDeadzone) {
+        // 开机、重连和退出 L3 后，先回中再允许拨杆驱动。
+        ready = true;
+        return kNeutralUs;
+    }
+    if (!ready) {
+        return 0;
+    }
+
+    const int full_scale = delta < 0 ? 128 : 127;
+    const int offset = (distance - kDeadzone) * kMaxOffsetUs / (full_scale - kDeadzone);
+    return static_cast<uint16_t>(kNeutralUs + (delta < 0 ? -offset : offset));
+}
