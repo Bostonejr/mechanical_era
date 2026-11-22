@@ -28,9 +28,12 @@ constexpr int kMaxTargetPercent = 100;
 constexpr float kMaxOutput = 100.0F;
 constexpr uint32_t kControlPeriodMs = 10;
 constexpr uint32_t kMaxDtMs = 50;
-constexpr uint32_t kEncoderStallMs = 300;
+// 连续 600 ms 没有编码器计数才判堵转；300 ms 容易在起步/低速时误判。
+constexpr uint32_t kEncoderStallMs = 600;
 constexpr int kStallMinTarget = 10;
-constexpr int kStallRetryDelta = 10;
+constexpr int kStallRetryDelta = 5;
+// 只有在控制器确实在用力输出时才判堵转，避免低速蠕动/滑行时误判。
+constexpr float kStallMinOutput = 50.0F;
 
 // 100% 目标速度对应每秒的编码器计数。当前按 20 ticks / 10 ms 标定，
 // 即 2000 ticks/s；实测后只改这一个数。
@@ -195,9 +198,10 @@ int update_controller(MotorPid &controller, int target, uint32_t now_ms, float d
     const float requested =
         feedforward + kProportionalGain * error + kIntegralGain * candidate_integral;
 
-    // 只有目标足够大且控制器确实在输出时才判堵转；
-    // 低速蠕动、滑行和反转不会被误判为堵转。
-    const bool driving = magnitude(target) >= kStallMinTarget && requested > 0.0F;
+    // 只有目标足够大、且控制器确实在用力输出时才判堵转；
+    // 低速蠕动、滑行和短暂零计数不会被误判为堵转。
+    const bool driving =
+        magnitude(target) >= kStallMinTarget && requested >= kStallMinOutput;
     if (!driving || controller.encoder_ticks != 0) {
         controller.last_motion_ms = now_ms;
     } else if (now_ms - controller.last_motion_ms >= kEncoderStallMs) {
