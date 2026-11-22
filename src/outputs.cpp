@@ -29,17 +29,24 @@ constexpr uint32_t kReversalDeadTimeMs = 2;
 }
 
 void apply_servos(ArmCommand command) {
-    constexpr int kNeutralUs = 1500;//中位
-    constexpr int kSpanUs = 1000;
+    // R3 自锁释放：CCR=0，输出持续低电平，不发送舵机脉冲，舵机卸力。
+    if (arm_servos_released()) {
+        for (const auto channel : servo_channels) {
+            __HAL_TIM_SET_COMPARE(&htim8, channel, 0);
+        }
+        return;
+    }
+
     // 每路允许的物理行程（µs）。180° 舵机：500=0°、1500=90°、2500=180°。
     // 标定时收到“机械限位前一点点”，舵机就不会顶死堵转发烫。
     static const int kMinUs[4] = {600, 600, 600, 600};
     static const int kMaxUs[4] = {2400, 2400, 2400, 2400};
     for (unsigned i = 0; i < 4; ++i) {
-        int percent = command.servo[i];
-        if (percent < -100) percent = -100;
-        if (percent > 100) percent = 100;
-        int pulse_us = kNeutralUs + kSpanUs * percent / 100;
+        // ArmCommand.servo 是角度 0~180（90=中位），不是百分比。
+        int degrees = command.servo[i];
+        if (degrees < 0) degrees = 0;
+        if (degrees > 180) degrees = 180;
+        int pulse_us = 500 + degrees * 2000 / 180;
         if (pulse_us < kMinUs[i]) pulse_us = kMinUs[i];
         if (pulse_us > kMaxUs[i]) pulse_us = kMaxUs[i];
         __HAL_TIM_SET_COMPARE(&htim8, servo_channels[i], static_cast<uint32_t>(pulse_us));

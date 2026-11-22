@@ -71,11 +71,8 @@ extern "C" void main_task() {
             }
         }
         apply_motors(command);
-        // Coordination point with arm_control: emergency stop currently sends a
-        // zeroed ArmCommand (all servos to neutral). Once P3 defines the STOW
-        // preset, command STOW here instead if neutral is not a safe pose.
-        // 与 arm_control 的协调点：急停时目前发送清零的 ArmCommand（所有舵机回中位）。
-        // 待程序员 3 定义 STOW 姿态后，若中位不是安全姿态，此处应改为命令 STOW。
+        // 急停时命令 arm_control 里的 STOW 收车姿态（角度制）。
+        // Emergency stop commands the STOW pose defined in arm_control.
         const auto arm_command = emergency_stop ? arm_emergency_stop() : arm_from_ps2(frame); // P3
         apply_servos(arm_command);
         if (HAL_GetTick() - last_report >= 500U) {
