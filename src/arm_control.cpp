@@ -16,11 +16,11 @@ constexpr int kServoMin[4] = {-90, -90, -90, -90};
 constexpr int kServoMax[4] = { 90,  90,  90,  90};
 
 // 预设姿态表（先用全0占位，待会儿实车调参填入具体数值）
-constexpr int kPoseSTOW[4]          = {0, 0, 0, 0};
-constexpr int kPosePICK[4]          = {0, 0, 0, 0};
-constexpr int kPoseCARRY[4]         = {0, 0, 0, 0};
-constexpr int kPosePLACE_GROUND[4]  = {0, 0, 0, 0};
-constexpr int kPosePLACE_PLATFORM[4]= {0, 0, 0, 0};
+constexpr int kPoseSTOW[4]          = {0, -70, 90, 0};
+constexpr int kPosePICK[4]          = {0, -80, 20, 80};
+constexpr int kPoseCARRY[4]         = {0, -20, 70, -80};
+constexpr int kPosePLACE_GROUND[4]  = {0, -80, 20, 80};
+constexpr int kPosePLACE_PLATFORM[4]= {0, 20, 40, 80};
 // =====================================================================
 
 int target_pose[4] = {0, 0, 0, 0};
@@ -72,15 +72,22 @@ ArmCommand arm_from_ps2(const Ps2Frame &frame) {
     }
 
     // 2. 夹爪控制（覆盖目标姿态的夹爪项）
-    if (pressed_edge(frame, Ps2Button::Cross))  target_pose[kServoGripper] = -80; // 闭合
-    if (pressed_edge(frame, Ps2Button::Circle)) target_pose[kServoGripper] = 80;  // 张开
+    if (pressed_edge(frame, Ps2Button::Cross))  target_pose[kServoGripper] = -60; // 闭合
+    if (pressed_edge(frame, Ps2Button::Circle)) target_pose[kServoGripper] = 60;  // 张开
 
     // 3. 摇杆手动微调（右摇杆控制底座和肩部，死区 5）
     if (frame.analog) {
         const int rx = axis_percent(frame.right_x);
         const int ry = axis_percent(frame.right_y);
-        if (rx < -5 || rx > 5) target_pose[kServoBase] = rx;
-        if (ry < -5 || ry > 5) target_pose[kServoShoulder] = ry;
+        
+        // 按住左摇杆（L3）时，右摇杆上下控制肘关节
+        if (ps2_pressed(frame, Ps2Button::L3)) {
+            if (ry < -10 || ry > 10) target_pose[kServoElbow] = ry;
+        } else {
+            // 没按 L3 时，右摇杆正常控制底座和肩部
+            if (rx < -10 || rx > 10) target_pose[kServoBase] = rx;
+            if (ry < -10 || ry > 10) target_pose[kServoShoulder] = ry;
+        }
     }
 
     last_buttons = frame.buttons;

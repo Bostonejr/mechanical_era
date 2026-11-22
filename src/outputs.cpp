@@ -107,7 +107,7 @@ void init_outputs() {
             Error_Handler();
         }
     }
-    apply_servos({});
+    //apply_servos({});//P3
     for (const auto channel : servo_channels) {
         if (HAL_TIM_PWM_Start(&htim8, channel) != HAL_OK) {
             Error_Handler();
