@@ -35,8 +35,8 @@ constexpr int kStallRetryDelta = 10;
 // 100% 目标速度对应每秒的编码器计数。当前按 20 ticks / 10 ms 标定，
 // 即 2000 ticks/s；实测后只改这一个数。
 constexpr float kTicksPerSecondAtFullSpeed = 2000.0F;
-constexpr float kProportionalGain = 10.0F;
-constexpr float kIntegralGain = 0.01F;
+constexpr float kProportionalGain = 50.0F;
+constexpr float kIntegralGain = 2.0F;
 // I 项上限始终保持 100%，改 Ki 时不需要再手算 kIntegralLimit。
 constexpr float kIntegralLimit = kMaxOutput / kIntegralGain;
 
