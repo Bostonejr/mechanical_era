@@ -29,19 +29,19 @@ constexpr uint32_t kReversalDeadTimeMs = 2;
 }
 
 void apply_servos(ArmCommand command) {
-    // TIM8 每 1 微秒计数一次（72 MHz / 72），因此比较值就是脉宽的微秒数。
-    constexpr int kNeutralUs = 1500;
+    constexpr int kNeutralUs = 1500;//中位
     constexpr int kSpanUs = 1000;
+    // 每路允许的物理行程（µs）。180° 舵机：500=0°、1500=90°、2500=180°。
+    // 标定时收到“机械限位前一点点”，舵机就不会顶死堵转发烫。
+    static const int kMinUs[4] = {600, 600, 600, 600};
+    static const int kMaxUs[4] = {2400, 2400, 2400, 2400};
     for (unsigned i = 0; i < 4; ++i) {
-        const int percent =
-            command.servo[i] < -100 ? -100 : (command.servo[i] > 100 ? 100 : command.servo[i]);
-        
+        int percent = command.servo[i];
+        if (percent < -100) percent = -100;
+        if (percent > 100) percent = 100;
         int pulse_us = kNeutralUs + kSpanUs * percent / 100;
-        
-        // 【新增】P3 绝对物理限幅，防止软件意外导致舵机超行程堵转烧毁
-        if (pulse_us < 600) pulse_us = 600;   
-        if (pulse_us > 2400) pulse_us = 2400; 
-        
+        if (pulse_us < kMinUs[i]) pulse_us = kMinUs[i];
+        if (pulse_us > kMaxUs[i]) pulse_us = kMaxUs[i];
         __HAL_TIM_SET_COMPARE(&htim8, servo_channels[i], static_cast<uint32_t>(pulse_us));
     }
 }
